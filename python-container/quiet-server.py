@@ -1,6 +1,13 @@
 #!/usr/bin/python3
 
-import requests, warnings, subprocess, argparse, time
+import requests, warnings, subprocess, argparse, time, os
+
+def get_env_vars() -> dict:
+    idrac_ip = os.environ.get("IDRACIP")
+    idrac_user = os.environ.get("IDRACUSER")
+    idrac_password = os.environ.get("IDRACPASSWORD")
+    env_vars = {"idrac_ip":idrac_ip, "idrac_user":idrac_user, "idrac_password":idrac_password}
+    return env_vars
 
 def manual_fan_control(idrac_ip, idrac_username, idrac_password) -> None:
     # SET FANS TO LOW SPEED USING IPMI
@@ -41,20 +48,8 @@ def ipmitool_checker() -> bool:
     if process.returncode != 0:
         raise SystemError("ipmitool not found/installed")
 
-def init_argparse() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        usage="%(prog)s [OPTION]",
-        description="fan control and temperature monitoring script"
-    )
-    parser.add_argument('ip',help='iDRAC IP address')
-    parser.add_argument('usr', help='iDRAC username')
-    parser.add_argument('pw', help='iDRAC password')
-    parser.add_argument("-v", "--version", action="version", version = f"{parser.prog} version 1.0.0")
-    return parser
-
 def main() -> None:
-    parser = init_argparse()
-    args = parser.parse_args()
+    env_vars = get_env_vars()
 
     ipmitool_checker()
     manual_fan_control(args.ip, args.usr, args.pw)
