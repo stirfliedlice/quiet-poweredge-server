@@ -1,35 +1,23 @@
 #!/usr/bin/python3
-
-import time, argparse, subprocess
+import time, subprocess, os
 from datetime import datetime
 
-def myfunction(idrac_ip="blank idrac_ip", idrac_username="blank idrac_username", idrac_password="blank idrac_password") -> None:
+def myfunction(ip, usr, pw) -> None:
     while True:
-        # with open("timestamp.txt", "a") as f:
-        #     f.write("The current timestamp is: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        #     f.close()
-        print("The current timestamp is: " + datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        print(idrac_ip + " " + idrac_username + " " + idrac_password)
-        process = subprocess.run(["ipmitool","-help"], capture_output=True)
-        print(process.stderr)
+        print(f"The current timestamp is: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"{ip} {usr} {pw}")
+        process = subprocess.run(["ipmitool", "-I", "lanplus", "-H", ip, "-U", usr, "-P", pw, "session", "info", "all"], capture_output=True, check=True, text=True)
         time.sleep(10)
 
-def init_argparse() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        usage="%(prog)s [OPTION]",
-        description="just a test script"
-    )
-    parser.add_argument('ip',help='iDRAC IP address')
-    parser.add_argument('usr', help='iDRAC username')
-    parser.add_argument('pw', help='iDRAC password')
-    parser.add_argument("-v", "--version", action="version", version = f"{parser.prog} version 1.0.0")
-    return parser
+def get_os_env_vars():
+    ip = os.environ["IDRACIP"]
+    usr = os.environ["IDRACUSER"]
+    pw = os.environ["IDRACPASSWORD"]
+    return (ip, usr, pw)
 
 def main() -> None:
-    parser = init_argparse()
-    args = parser.parse_args()
-    myfunction(args.ip, args.usr, args.pw)
-    # myfunction()
+    env_vars = get_os_env_vars()
+    myfunction(env_vars[0], env_vars[1], env_vars[2])
 
 if __name__ == "__main__":
     main()

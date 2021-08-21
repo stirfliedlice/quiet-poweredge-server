@@ -3,22 +3,14 @@ version: "3.8"
 services:
   python_test:
     build:
-      context: ./test_script
+      context: ./python-container
     image: test_script_python:v1.0
     container_name: test_script_python
-    environment: 
-      - IDRACIP
-      - IDRACUSER
-    # entrypoint: [ 'sh', '-c', 'export IDRACPASSWORD=`cat /var/run/secrets/idrac_password` ; echo $IDRACPASSWORD' ]
+    env_file: 
+      - ~/idrac.env
     networks:
       - python_test
-    secrets:
-      - idrac_password
 
 networks:
   python_test:
     driver: bridge
-
-secrets:
-  idrac_password:
-    file: ~/idrac_password

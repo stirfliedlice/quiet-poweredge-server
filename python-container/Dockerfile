@@ -11,10 +11,5 @@ WORKDIR /usr/src/app
 
 COPY . .
 
-# ENTRYPOINT [ "sh", "-c", "export IDRACPASSWORD=`cat /var/run/secrets/idrac_password` ; python3 test_script.py ${IDRACIP} ${IDRACUSER} ${IDRACPASSWORD}" ]
-
-# ENTRYPOINT [ "sh", "./entrypoint.sh" ]
-# CMD [ "python3", "./test_script.py" ]
-
 ENTRYPOINT [ "python3" ]
 CMD [ "./test_script.py" ]

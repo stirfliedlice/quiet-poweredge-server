@@ -1,66 +1,59 @@
 #!/usr/bin/python3
-
-import requests, warnings, subprocess, argparse, time, os
+import requests, warnings, subprocess, time, os
 
 def get_env_vars() -> dict:
-    idrac_ip = os.environ.get("IDRACIP")
-    idrac_user = os.environ.get("IDRACUSER")
-    idrac_password = os.environ.get("IDRACPASSWORD")
-    env_vars = {"idrac_ip":idrac_ip, "idrac_user":idrac_user, "idrac_password":idrac_password}
-    return env_vars
+    ip = os.environ["IDRACIP"]
+    usr = os.environ["IDRACUSER"]
+    pw = os.environ["IDRACPASSWORD"]
+    return (ip, usr, pw)
 
-def manual_fan_control(idrac_ip, idrac_username, idrac_password) -> None:
-    # SET FANS TO LOW SPEED USING IPMI
-    # enable manual/static fan control
-    # ipmitool -I lanplus -H <iDRAC-IP> -U <iDRAC-USER> -P <iDRAC-PASSWORD> raw 0x30 0x30 0x01 0x00
-    # set fan speed to 20 %
-    # ipmitool -I lanplus -H <iDRAC-IP> -U <iDRAC-USER> -P <iDRAC-PASSWORD> raw 0x30 0x30 0x02 0xff 0x14
-    # set fan speed to 12 %
-    # ipmitool -I lanplus -H <iDRAC-IP> -U <iDRAC-USER> -P <iDRAC-PASSWORD> raw 0x30 0x30 0x02 0xff 0xC
-    subprocess.run(["ipmitool", "-I", "lanplus", "-H", idrac_ip, "-U", idrac_username, "-P", idrac_password, "raw", "0x30", "0x30", "0x01", "0x00"])
-    subprocess.run(["ipmitool", "-I", "lanplus", "-H", idrac_ip, "-U", idrac_username, "-P", idrac_password, "raw", "0x30", "0x30", "0xff", "0x14"])
-    # subprocess.run(["ipmitool", "-I", "lanplus", "-H", idrac_ip, "-U", idrac_username, "-P", idrac_password, "sensor", "reading", "Exhaust Temp"])
-
-def auto_fan_control(idrac_ip, idrac_username, idrac_password) -> None:
-    # TURN ON FANS USING IPMI
-    # disable manual/static fan control
-    # ipmitool -I lanplus -H <iDRAC-IP> -U <iDRAC-USER> -P <iDRAC-PASSWORD> raw 0x30 0x30 0x01 0x01
-    subprocess.run(["ipmitool", "-I", "lanplus", "-H", idrac_ip, "-U", idrac_username, "-P", idrac_password, "raw", "0x30", "0x30", "0x01", "0x01"])
-    # subprocess.run(["ipmitool", "-I", "lanplus", "-H", idrac_ip, "-U", idrac_username, "-P", idrac_password, "sensor", "reading", "Inlet Temp"])
+def ipmitool_checker() -> bool:
+    process = subprocess.run(["which","ipmitool"], check=True)
 
 def query_redfish(idrac_ip, idrac_username, idrac_password) -> dict:
     warnings.filterwarnings("ignore")
     # HTTP GET REQUEST
-    response = requests.get(f"https://{idrac_ip}/redfish/v1/Chassis/System.Embedded.1/Thermal",verify=False,auth=(idrac_username, idrac_password))
-    data = response.json()
-    return data
+    response = requests.get(f"https://{idrac_ip}/redfish/v1/Chassis/System.Embedded.1/Thermal", verify=False, auth=(idrac_username, idrac_password))
+    return response.json()
 
 def check_temperature(data) -> bool:
     # ANALYZE DATA FROM REQUEST
     for i in range(len(data["Temperatures"])):
         # CHECK THE TEMPS
-        if data["Temperatures"][i]["ReadingCelsius"] > (data["Temperatures"][i]["UpperThresholdNonCritical"] * .8):
+        current_temp = data["Temperatures"][i]["ReadingCelsius"]
+        max_non_crit_temp = data["Temperatures"][i]["UpperThresholdNonCritical"]
+        if current_temp > (max_non_crit_temp * .8):
             return True
     return False
 
-def ipmitool_checker() -> bool:
-    process = subprocess.run(["which","ipmitool"], capture_output=True)
-    if process.returncode != 0:
-        raise SystemError("ipmitool not found/installed")
+def run_ipmi_cmd(ipmi_cmd) -> None:
+    subprocess.run(ipmi_cmd, check=True)
 
 def main() -> None:
     env_vars = get_env_vars()
 
+    ip = env_vars[0]
+    usr = env_vars[1]
+    pw = env_vars[2]
+
+    ipmi_cmd = ["ipmitool", "-I", "lanplus", "-H", ip, "-U", usr, "-P", pw, "raw", "0x30", "0x30"]
+    manual_control = ["0x01", "0x00"]
+    manual_setpoint = ["0xff", "0x14"]
+    auto_control = ["0x01", "0x01"]
+
     ipmitool_checker()
-    manual_fan_control(args.ip, args.usr, args.pw)
+
+    run_ipmi_cmd(ipmi_cmd.extend(manual_control))
+    run_ipmi_cmd(ipmi_cmd.extend(manual_setpoint))
     while True:
-        data = query_redfish(args.ip, args.usr, args.pw)
+        data = query_redfish(ip, usr, pw)
         if check_temperature(data):
-            auto_fan_control(args.ip, args.usr, args.pw)
+            run_ipmi_cmd(ipmi_cmd.extend(auto_control))
             while True:
-                data = query_redfish(args.ip, args.usr, args.pw)
+                data = query_redfish(ip, usr, pw)
                 if not check_temperature(data):
-                    manual_fan_control(args.ip, args.usr, args.pw)
+                    run_ipmi_cmd(ipmi_cmd.extend(manual_control))
+                    run_ipmi_cmd(ipmi_cmd.extend(manual_setpoint))
                     break
                 time.sleep(10)
         time.sleep(10)
@@ -68,3 +61,13 @@ def main() -> None:
 if __name__ == "__main__":
     main()
 
+# SET FANS TO LOW SPEED USING IPMI
+# enable manual/static fan control
+# ipmitool -I lanplus -H <iDRAC-IP> -U <iDRAC-USER> -P <iDRAC-PASSWORD> raw 0x30 0x30 0x01 0x00
+# set fan speed to 20 %
+# ipmitool -I lanplus -H <iDRAC-IP> -U <iDRAC-USER> -P <iDRAC-PASSWORD> raw 0x30 0x30 0x02 0xff 0x14
+# set fan speed to 12 %
+# ipmitool -I lanplus -H <iDRAC-IP> -U <iDRAC-USER> -P <iDRAC-PASSWORD> raw 0x30 0x30 0x02 0xff 0xC
+# TURN ON FANS USING IPMI
+# disable manual/static fan control
+# ipmitool -I lanplus -H <iDRAC-IP> -U <iDRAC-USER> -P <iDRAC-PASSWORD> raw 0x30 0x30 0x01 0x01
